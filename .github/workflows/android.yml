@@ -1,0 +1,160 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+# No repository secrets are required anywhere in this workflow.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Ensure Gradle wrapper exists
+        run: |
+          if [ ! -f "./gradlew" ] || [ ! -f "./gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "Gradle wrapper missing — generating with a temporary system Gradle."
+            SYSTEM_GRADLE_VERSION="8.7"
+            curl -sSL -o /tmp/gradle.zip "https://services.gradle.org/distributions/gradle-${SYSTEM_GRADLE_VERSION}-bin.zip"
+            unzip -q /tmp/gradle.zip -d /tmp
+            /tmp/gradle-${SYSTEM_GRADLE_VERSION}/bin/gradle wrapper --gradle-version 8.7 --distribution-type all
+          else
+            echo "Gradle wrapper already present."
+          fi
+          chmod +x ./gradlew
+
+      - name: Setup Gradle (cache)
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Seed deterministic CI debug keystore
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkeypair -v \
+              -keystore ~/.android/debug.keystore \
+              -storepass android -keypass android \
+              -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Siroha Equ CI, OU=CI, O=RahmatSobrian, L=Local, S=Local, C=ID"
+            echo "Generated fresh deterministic debug.keystore for this repo."
+          else
+            echo "Using existing debug.keystore (already deterministic across runs on this runner)."
+          fi
+        # NOTE: on GitHub-hosted runners the keystore is NOT persisted between
+        # separate workflow runs unless cached explicitly (see next step),
+        # which is what makes consecutive CI-built APKs able to update each
+        # other. This uses only the standard AGP debug-signing mechanism —
+        # no release keystore, no repository secret, ever.
+
+      - name: Cache debug keystore across runs
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: siroha-equ-debug-keystore-v1
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
+      - name: Run lint
+        run: ./gradlew :app:lintDebug --stacktrace
+
+      - name: Upload debug APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+
+      - name: Upload unit test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: warn
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-debug.html
+          if-no-files-found: warn
+
+      - name: Collect build logs on failure
+        if: failure()
+        run: |
+          mkdir -p build-logs
+          find . -name "*.log" -exec cp {} build-logs/ \; || true
+          cp -r app/build/reports build-logs/reports 2>/dev/null || true
+
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build-logs/
+          if-no-files-found: ignore
+
+  instrumentation-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Enable KVM for emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run instrumentation tests on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
+
+      - name: Upload instrumentation test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumentation-test-report
+          path: app/build/reports/androidTests/connected/
+          if-no-files-found: warn

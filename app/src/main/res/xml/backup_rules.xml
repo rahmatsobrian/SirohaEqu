@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Diagnostic logs must never leave the device automatically -->
+    <exclude domain="database" path="diagnostic_logs.db" />
+</full-backup-content>
