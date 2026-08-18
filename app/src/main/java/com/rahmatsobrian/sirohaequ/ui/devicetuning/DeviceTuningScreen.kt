@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.rahmatsobrian.sirohaequ.data.model.DeviceProfile
 import com.rahmatsobrian.sirohaequ.ui.EqGraph
 import com.rahmatsobrian.sirohaequ.ui.EqualizerUiState
+import com.rahmatsobrian.sirohaequ.ui.frequencyCategory
 
 @Composable
 fun DeviceTuningScreen(
@@ -46,7 +47,9 @@ fun DeviceTuningScreen(
         }
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(padding),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -87,17 +90,31 @@ fun DeviceTuningScreen(
 
             item {
                 Text("Parametric EQ", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Geser titik pada grafik ke atas/bawah, atau pakai slider di tiap band di bawah. Ketuk dua kali sebuah titik untuk mengembalikannya ke 0 dB.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 EqGraph(
                     bands = state.activePreset.bands,
                     onBandGainChange = onBandChange,
-                    onBandReset = { bandId -> onBandChange(bandId, 0f) }
+                    onBandReset = { bandId -> onBandChange(bandId, 0f) },
+                    showBandLabels = false
                 )
             }
 
             items(state.activePreset.bands) { band ->
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
-                        Text("${formatFreq(band.frequencyHz)} — ${"%.1f".format(band.gainDb)} dB")
+                        Text(
+                            "${formatFreq(band.frequencyHz)} — ${frequencyCategory(band.frequencyHz)}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            "${"%+.1f".format(band.gainDb)} dB",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                         Slider(
                             value = band.gainDb,
                             onValueChange = { onBandChange(band.id, it) },
