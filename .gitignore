@@ -1,0 +1,28 @@
+*.iml
+.gradle/
+/local.properties
+.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Keep the wrapper jar tracked normally in most projects, but this repo
+# deliberately does NOT commit gradle-wrapper.jar or gradlew/gradlew.bat —
+# the CI workflow generates them if missing (see .github/workflows/android.yml,
+# spec section 20). Uncomment below if you choose to commit the wrapper
+# yourself instead of relying on CI generation:
+# !gradle/wrapper/gradle-wrapper.jar
+# !gradlew
+# !gradlew.bat
+
+*.apk
+*.ap_
+*.dex
+*.class
+
+# Debug keystore is CI-managed/cached, never committed
+*.keystore
+!debug.keystore.example
