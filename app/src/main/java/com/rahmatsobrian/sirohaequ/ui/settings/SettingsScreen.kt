@@ -18,10 +18,10 @@ import androidx.compose.material.icons.filled.Adjust
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Diagnostics
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Layers
@@ -259,7 +259,7 @@ fun SettingsScreen(
             // Diagnostics Section
             item {
                 SectionHeader(
-                    icon = Icons.Filled.Diagnostics,
+                    icon = Icons.Filled.BugReport,
                     title = "Diagnostik"
                 )
             }
@@ -280,7 +280,7 @@ fun SettingsScreen(
                 SettingsNavItem(
                     title = "Buka Diagnostics",
                     subtitle = "Lihat log dan ekspor laporan",
-                    icon = Icons.Filled.Diagnostics,
+                    icon = Icons.Filled.BugReport,
                     onClick = onOpenDiagnostics
                 )
             }
