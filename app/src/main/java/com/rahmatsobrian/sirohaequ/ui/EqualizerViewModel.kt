@@ -14,6 +14,7 @@ import com.rahmatsobrian.sirohaequ.data.ThemeMode
 import com.rahmatsobrian.sirohaequ.data.model.DeviceProfile
 import com.rahmatsobrian.sirohaequ.data.model.EqBand
 import com.rahmatsobrian.sirohaequ.data.model.Preset
+import com.rahmatsobrian.sirohaequ.data.model.ProcessingChain
 import com.rahmatsobrian.sirohaequ.data.model.flatPreset
 import com.rahmatsobrian.sirohaequ.logging.AppLogger
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,8 +33,14 @@ data class EqualizerUiState(
     val presets: List<Preset> = emptyList(),
     val deviceProfiles: List<DeviceProfile> = emptyList(),
     val activeDeviceName: String? = null,
+    val activeDeviceType: Int? = null,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val dynamicColor: Boolean = true
+    val dynamicColor: Boolean = true,
+    val preampDb: Float = 0f,
+    val limiterEnabled: Boolean = true,
+    val crossfeedPercent: Int = 0,
+    val autoProfile: Boolean = true,
+    val performanceMode: String = "balanced"
 )
 
 class EqualizerViewModel(application: Application) : AndroidViewModel(application) {
@@ -56,7 +63,12 @@ class EqualizerViewModel(application: Application) : AndroidViewModel(applicatio
         deviceProfileRepo.profiles,
         deviceManager.activeDevice,
         settingsRepo.themeMode,
-        settingsRepo.dynamicColor
+        settingsRepo.dynamicColor,
+        settingsRepo.preampDb,
+        settingsRepo.limiterEnabled,
+        settingsRepo.crossfeedPercent,
+        settingsRepo.autoProfile,
+        settingsRepo.performanceMode
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         EqualizerUiState(
@@ -68,8 +80,14 @@ class EqualizerViewModel(application: Application) : AndroidViewModel(applicatio
             presets = values[5] as List<Preset>,
             deviceProfiles = values[6] as List<DeviceProfile>,
             activeDeviceName = (values[7] as com.rahmatsobrian.sirohaequ.audio.ActiveDeviceInfo?)?.name,
+            activeDeviceType = (values[7] as com.rahmatsobrian.sirohaequ.audio.ActiveDeviceInfo?)?.androidType,
             themeMode = values[8] as ThemeMode,
-            dynamicColor = values[9] as Boolean
+            dynamicColor = values[9] as Boolean,
+            preampDb = values[10] as Float,
+            limiterEnabled = values[11] as Boolean,
+            crossfeedPercent = values[12] as Int,
+            autoProfile = values[13] as Boolean,
+            performanceMode = values[14] as String
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), EqualizerUiState())
 
@@ -89,7 +107,6 @@ class EqualizerViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             deviceManager.activeDevice.collect { device ->
                 if (device == null) return@collect
-                val autoEnabled = uiState.value.eqEnabled // cheap gate; full check below
                 val profiles = uiState.value.deviceProfiles
                 val match = AudioDeviceManager.matchProfile(device, profiles)
                 if (match != null && match.isAutoApply) {
@@ -100,7 +117,6 @@ class EqualizerViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    /** Called once we have a real audio session id (e.g. from a control-session broadcast). */
     fun attachToAudioSession(sessionId: Int) {
         audioEngine.attachToSession(sessionId)
         audioEngine.applyPreset(_activePreset.value)
@@ -119,7 +135,24 @@ class EqualizerViewModel(application: Application) : AndroidViewModel(applicatio
         val updatedBands = current.bands.map {
             if (it.id == bandId) it.copy(gainDb = newGainDb.coerceIn(-24f, 24f)) else it
         }
-        val updated = current.copy(bands = updatedBands)
+        val updated = current.copy(bands = updatedBands, isBuiltIn = false)
+        _activePreset.value = updated
+        audioEngine.applyPreset(updated)
+    }
+
+    fun updateBandQ(bandId: Int, newQ: Float) {
+        val current = _activePreset.value
+        val updatedBands = current.bands.map {
+            if (it.id == bandId) it.copy(qFactor = newQ.coerceIn(0.1f, 10f)) else it
+        }
+        val updated = current.copy(bands = updatedBands, isBuiltIn = false)
+        _activePreset.value = updated
+        audioEngine.applyPreset(updated)
+    }
+
+    fun updateProcessingChain(chain: ProcessingChain) {
+        val current = _activePreset.value
+        val updated = current.copy(chain = chain, isBuiltIn = false)
         _activePreset.value = updated
         audioEngine.applyPreset(updated)
     }
@@ -139,7 +172,8 @@ class EqualizerViewModel(application: Application) : AndroidViewModel(applicatio
                 id = "user_${System.currentTimeMillis()}",
                 name = name,
                 isBuiltIn = false,
-                createdAtEpochMs = System.currentTimeMillis()
+                createdAtEpochMs = System.currentTimeMillis(),
+                updatedAtEpochMs = System.currentTimeMillis()
             )
             presetRepo.save(newPreset)
         }
@@ -147,6 +181,33 @@ class EqualizerViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun deletePreset(id: String) {
         viewModelScope.launch { presetRepo.delete(id) }
+    }
+
+    fun duplicatePreset(source: Preset, newName: String) {
+        viewModelScope.launch {
+            val dup = source.copy(
+                id = "user_${System.currentTimeMillis()}",
+                name = newName,
+                isBuiltIn = false,
+                createdAtEpochMs = System.currentTimeMillis(),
+                updatedAtEpochMs = System.currentTimeMillis()
+            )
+            presetRepo.save(dup)
+        }
+    }
+
+    fun exportPresetJson(id: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            val json = presetRepo.exportJson(id)
+            onResult(json)
+        }
+    }
+
+    fun importPresetJson(json: String, onResult: (Result<Preset>) -> Unit) {
+        viewModelScope.launch {
+            val result = presetRepo.importJson(json)
+            onResult(result)
+        }
     }
 
     fun saveDeviceProfile(profile: DeviceProfile) {
@@ -163,6 +224,141 @@ class EqualizerViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setDynamicColor(enabled: Boolean) {
         viewModelScope.launch { settingsRepo.setDynamicColor(enabled) }
+    }
+
+    fun setPreampDb(db: Float) {
+        viewModelScope.launch { settingsRepo.setPreampDb(db) }
+        val current = _activePreset.value
+        val updated = current.copy(
+            chain = current.chain.copy(preampDb = db),
+            isBuiltIn = false
+        )
+        _activePreset.value = updated
+        audioEngine.applyPreset(updated)
+    }
+
+    fun setLimiterEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepo.setLimiterEnabled(enabled) }
+        val current = _activePreset.value
+        val updated = current.copy(
+            chain = current.chain.copy(limiterEnabled = enabled),
+            isBuiltIn = false
+        )
+        _activePreset.value = updated
+        audioEngine.applyPreset(updated)
+    }
+
+    fun setCrossfeedPercent(percent: Int) {
+        viewModelScope.launch { settingsRepo.setCrossfeedPercent(percent) }
+        val current = _activePreset.value
+        val updated = current.copy(
+            chain = current.chain.copy(crossfeedPercent = percent),
+            isBuiltIn = false
+        )
+        _activePreset.value = updated
+        audioEngine.applyPreset(updated)
+    }
+
+    fun setAutoProfile(enabled: Boolean) {
+        viewModelScope.launch { settingsRepo.setAutoProfile(enabled) }
+    }
+
+    fun setPerformanceMode(mode: String) {
+        viewModelScope.launch { settingsRepo.setPerformanceMode(mode) }
+    }
+
+    fun setBalance(balance: Float) {
+        val current = _activePreset.value
+        val updated = current.copy(
+            chain = current.chain.copy(balance = balance.coerceIn(-1f, 1f)),
+            isBuiltIn = false
+        )
+        _activePreset.value = updated
+        audioEngine.applyPreset(updated)
+    }
+
+    fun setMono(enabled: Boolean) {
+        val current = _activePreset.value
+        val updated = current.copy(
+            chain = current.chain.copy(monoEnabled = enabled),
+            isBuiltIn = false
+        )
+        _activePreset.value = updated
+        audioEngine.applyPreset(updated)
+    }
+
+    fun setStereoWidth(percent: Int) {
+        val current = _activePreset.value
+        val updated = current.copy(
+            chain = current.chain.copy(stereoWidthPercent = percent.coerceIn(0, 200)),
+            isBuiltIn = false
+        )
+        _activePreset.value = updated
+        audioEngine.applyPreset(updated)
+    }
+
+    fun setBassBoostDb(db: Float) {
+        val current = _activePreset.value
+        val updated = current.copy(
+            chain = current.chain.copy(bassBoostDb = db.coerceIn(0f, 24f)),
+            isBuiltIn = false
+        )
+        _activePreset.value = updated
+        audioEngine.applyPreset(updated)
+    }
+
+    fun setSubBassBoostDb(db: Float) {
+        val current = _activePreset.value
+        val updated = current.copy(
+            chain = current.chain.copy(subBassBoostDb = db.coerceIn(0f, 24f)),
+            isBuiltIn = false
+        )
+        _activePreset.value = updated
+        audioEngine.applyPreset(updated)
+    }
+
+    fun setTrebleBoostDb(db: Float) {
+        val current = _activePreset.value
+        val updated = current.copy(
+            chain = current.chain.copy(trebleBoostDb = db.coerceIn(0f, 24f)),
+            isBuiltIn = false
+        )
+        _activePreset.value = updated
+        audioEngine.applyPreset(updated)
+    }
+
+    fun setAirBoostDb(db: Float) {
+        val current = _activePreset.value
+        val updated = current.copy(
+            chain = current.chain.copy(airBoostDb = db.coerceIn(0f, 24f)),
+            isBuiltIn = false
+        )
+        _activePreset.value = updated
+        audioEngine.applyPreset(updated)
+    }
+
+    fun setVolumeNormalization(enabled: Boolean) {
+        val current = _activePreset.value
+        val updated = current.copy(
+            chain = current.chain.copy(volumeNormalizationEnabled = enabled),
+            isBuiltIn = false
+        )
+        _activePreset.value = updated
+        audioEngine.applyPreset(updated)
+    }
+
+    fun setCompressor(enabled: Boolean, thresholdDb: Float = -18f, ratio: Float = 2f) {
+        val current = _activePreset.value
+        val updated = current.copy(
+            chain = current.chain.copy(
+                compressorEnabled = enabled,
+                compressorThresholdDb = thresholdDb,
+                compressorRatio = ratio
+            ),
+            isBuiltIn = false
+        )
+        _activePreset.value = updated
+        audioEngine.applyPreset(updated)
     }
 
     override fun onCleared() {

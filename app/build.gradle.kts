@@ -14,20 +14,16 @@ android {
         applicationId = "com.rahmatsobrian.sirohaequ"
         minSdk = 29 // Android 10
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
 
     // Deterministic debug signing so consecutive CI builds can update over each other.
-    // Uses the standard AGP-managed debug keystore (~/.android/debug.keystore) which
-    // the CI workflow seeds deterministically before the build step (see android.yml).
     signingConfigs {
         getByName("debug") {
-            // Left to AGP default debug store; CI seeds a fixed, reproducible
-            // debug.keystore so signature stays stable across CI runs.
         }
     }
 
@@ -40,6 +36,7 @@ android {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
@@ -78,6 +75,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
     implementation("androidx.activity:activity-compose:1.9.1")
+
+    // Splash Screen (Android 12+)
+    implementation("androidx.core:core-splashscreen:1.0.1")
 
     // Compose (BOM keeps versions aligned)
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))

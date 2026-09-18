@@ -17,6 +17,7 @@ import androidx.navigation.compose.rememberNavController
 import com.rahmatsobrian.sirohaequ.logging.AppLogger
 import com.rahmatsobrian.sirohaequ.ui.EqualizerViewModel
 import com.rahmatsobrian.sirohaequ.ui.MainScreen
+import com.rahmatsobrian.sirohaequ.ui.about.AboutScreen
 import com.rahmatsobrian.sirohaequ.ui.diagnostics.DiagnosticsScreen
 import com.rahmatsobrian.sirohaequ.ui.devicetuning.DeviceTuningScreen
 import com.rahmatsobrian.sirohaequ.ui.presets.PresetScreen
@@ -29,6 +30,7 @@ object Routes {
     const val PRESETS = "presets"
     const val SETTINGS = "settings"
     const val DIAGNOSTICS = "diagnostics"
+    const val ABOUT = "about"
 }
 
 class MainActivity : ComponentActivity() {
@@ -54,15 +56,31 @@ class MainActivity : ComponentActivity() {
                                 onNavigateDeviceTuning = { navController.navigate(Routes.DEVICE_TUNING) },
                                 onNavigatePresets = { navController.navigate(Routes.PRESETS) },
                                 onNavigateSettings = { navController.navigate(Routes.SETTINGS) },
+                                onNavigateAbout = { navController.navigate(Routes.ABOUT) },
                                 onToggleEq = viewModel::setEqEnabled,
-                                onPreampChange = { /* wired via SettingsRepository in Settings screen */ }
+                                onPreampChange = viewModel::setPreampDb,
+                                onApplyDeviceProfile = { profile ->
+                                    profile.presetId.let { presetId ->
+                                        state.presets.find { it.id == presetId }?.let {
+                                            viewModel.applyPreset(it)
+                                        }
+                                    }
+                                },
+                                onDeleteDeviceProfile = viewModel::deleteDeviceProfile
                             )
                         }
                         composable(Routes.DEVICE_TUNING) {
                             DeviceTuningScreen(
                                 state = state,
                                 onBandChange = viewModel::updateBand,
+                                onBandQChange = viewModel::updateBandQ,
                                 onSaveProfile = viewModel::saveDeviceProfile,
+                                onBassBoostChange = viewModel::setBassBoostDb,
+                                onSubBassChange = viewModel::setSubBassBoostDb,
+                                onTrebleBoostChange = viewModel::setTrebleBoostDb,
+                                onAirBoostChange = viewModel::setAirBoostDb,
+                                onPreampChange = viewModel::setPreampDb,
+                                onBalanceChange = viewModel::setBalance,
                                 onBack = { navController.popBackStack() }
                             )
                         }
@@ -73,6 +91,7 @@ class MainActivity : ComponentActivity() {
                                 onSelect = viewModel::applyPreset,
                                 onSaveAs = viewModel::savePresetAs,
                                 onDelete = viewModel::deletePreset,
+                                onDuplicate = viewModel::duplicatePreset,
                                 onBack = { navController.popBackStack() }
                             )
                         }
@@ -82,11 +101,23 @@ class MainActivity : ComponentActivity() {
                                 onThemeModeChange = viewModel::setThemeMode,
                                 onDynamicColorChange = viewModel::setDynamicColor,
                                 onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
+                                onOpenAbout = { navController.navigate(Routes.ABOUT) },
+                                onPreampChange = viewModel::setPreampDb,
+                                onLimiterChange = viewModel::setLimiterEnabled,
+                                onCrossfeedChange = viewModel::setCrossfeedPercent,
+                                onAutoProfileChange = viewModel::setAutoProfile,
+                                onPerformanceModeChange = viewModel::setPerformanceMode,
                                 onBack = { navController.popBackStack() }
                             )
                         }
                         composable(Routes.DIAGNOSTICS) {
                             DiagnosticsScreen(onBack = { navController.popBackStack() })
+                        }
+                        composable(Routes.ABOUT) {
+                            AboutScreen(
+                                state = state,
+                                onBack = { navController.popBackStack() }
+                            )
                         }
                     }
                 }
