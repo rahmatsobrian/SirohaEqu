@@ -66,6 +66,7 @@ fun MainScreen(
     onNavigateAbout: () -> Unit = {},
     onToggleEq: (Boolean) -> Unit,
     onPreampChange: (Float) -> Unit,
+    onBandChange: (bandId: Int, gainDb: Float) -> Unit = { _, _ -> },
     onApplyDeviceProfile: (DeviceProfile) -> Unit = {},
     onDeleteDeviceProfile: (String) -> Unit = {}
 ) {
@@ -134,8 +135,8 @@ fun MainScreen(
             item {
                 EqGraph(
                     bands = state.activePreset.bands,
-                    onBandGainChange = { _, _ -> },
-                    onBandReset = {},
+                    onBandGainChange = onBandChange,
+                    onBandReset = { bandId -> onBandChange(bandId, 0f) },
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }

@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
                                 onNavigateAbout = { navController.navigate(Routes.ABOUT) },
                                 onToggleEq = viewModel::setEqEnabled,
                                 onPreampChange = viewModel::setPreampDb,
+                                onBandChange = viewModel::updateBand,
                                 onApplyDeviceProfile = { profile ->
                                     profile.presetId.let { presetId ->
                                         state.presets.find { it.id == presetId }?.let {
