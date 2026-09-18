@@ -28,6 +28,9 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+          packages: 'platform-tools'
 
       - name: Ensure Gradle wrapper exists
         run: |
@@ -43,7 +46,7 @@ jobs:
           chmod +x ./gradlew
 
       - name: Setup Gradle (cache)
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Seed deterministic CI debug keystore
         run: |
@@ -136,6 +139,9 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
+          packages: 'platform-tools'
 
       - name: Enable KVM for emulator acceleration
         run: |
